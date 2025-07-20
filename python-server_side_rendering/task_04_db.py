@@ -5,57 +5,54 @@ import sqlite3
 
 app = Flask(__name__)
 
-def load_json_data():
-    with open('products.json') as f:
-        return json.load(f)
+def read_json():
+    try:
+        with open('products.json') as f:
+            return json.load(f)
+    except Exception:
+        return []
 
-def load_csv_data():
-    data = []
-    with open('products.csv') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            row['id'] = int(row['id'])
-            row['price'] = float(row['price'])
-            data.append(row)
-    return data
+def read_csv():
+    try:
+        with open('products.csv', newline='') as f:
+            reader = csv.DictReader(f)
+            return [row for row in reader]
+    except Exception:
+        return []
 
-def load_sql_data():
-    conn = sqlite3.connect('products.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, category, price FROM Products")
-    rows = cursor.fetchall()
-    conn.close()
-    return [{"id": r[0], "name": r[1], "category": r[2], "price": r[3]} for r in rows]
+def read_sql():
+    try:
+        conn = sqlite3.connect('products.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, category, price FROM Products")
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"id": row[0], "name": row[1], "category": row[2], "price": row[3]} for row in rows]
+    except Exception:
+        return []
 
 @app.route('/products')
 def products():
     source = request.args.get('source')
-    product_id = request.args.get('id', type=int)
-    products = []
+    product_id = request.args.get('id')
+    data = []
     error = None
 
-    try:
-        if source == 'json':
-            products = load_json_data()
-        elif source == 'csv':
-            products = load_csv_data()
-        elif source == 'sql':
-            products = load_sql_data()
-        else:
-            error = "Wrong source"
-            return render_template("product_display.html", error=error)
-    except Exception:
-        error = "Error loading data from " + source
-        return render_template("product_display.html", error=error)
+    if source == 'json':
+        data = read_json()
+    elif source == 'csv':
+        data = read_csv()
+    elif source == 'sql':
+        data = read_sql()
+    else:
+        error = "Wrong source"
 
-    if product_id:
-        filtered = [p for p in products if p.get("id") == product_id]
-        if not filtered:
+    if not error and product_id:
+        data = [item for item in data if str(item.get('id')) == str(product_id)]
+        if not data:
             error = "Product not found"
-            return render_template("product_display.html", error=error)
-        products = filtered
 
-    return render_template("product_display.html", products=products)
+    return render_template('product_display.html', products=data, error=error)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
